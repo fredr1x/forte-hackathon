@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: hackathon_database
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE}
+    ports:
+      - "6001:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: hackathon_keycloak
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      - ./keycloak-realm:/opt/keycloak/data/import
+      - keycloak_data:/opt/keycloak/data
+    ports:
+      - "8081:8080"
+    networks:
+      - backend-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hackathon_app
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: ${DATABASE_URL}
+      SPRING_DATASOURCE_USERNAME: ${DATABASE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${DATABASE_PASSWORD}
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI}
+    depends_on:
+      - postgres
+      - keycloak
+    ports:
+      - "8080:8080"
+    networks:
+      - backend-network
+
+volumes:
+  postgres_data:
+  keycloak_data:
+
+networks:
+  backend-network:
+    driver: bridge
