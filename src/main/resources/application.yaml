@@ -4,7 +4,7 @@ spring:
       chat:
         options:
           stream-usage: true
-      api-key: ${OPEN_API_API}
+      api-key: ${OPEN_AI_API}
 
   datasource:
     url: ${DATABASE_URL}
@@ -27,8 +27,13 @@ spring:
 server:
   port: 8080
 
-security:
-  oauth2:
-    resourceserver:
-      jwt:
-        issuer-uri: ${JWT_ISSUER_URI}
+openai:
+  api: ${OPEN_AI_API}
+  url: ${OPEN_AI_URL}
+
+jwt:
+  secret: ${JWT_SECRET_KEY}
+  expiration: ${JWT_EXPIRATION}
+
+jira:
+  url: ${JIRA_URL}

@@ -13,20 +13,17 @@ services:
     networks:
       - backend-network
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:24.0.5
-    container_name: hackathon_keycloak
-    command:
-      - start-dev
-      - --import-realm
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: hackathon_pgadmin
+    restart: unless-stopped
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-    volumes:
-      - ./keycloak-realm:/opt/keycloak/data/import
-      - keycloak_data:/opt/keycloak/data
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     ports:
-      - "8081:8080"
+      - "5050:80"
+    depends_on:
+      - postgres
     networks:
       - backend-network
 
@@ -40,11 +37,13 @@ services:
       SPRING_DATASOURCE_URL: ${DATABASE_URL}
       SPRING_DATASOURCE_USERNAME: ${DATABASE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${DATABASE_PASSWORD}
-      KEYCLOAK_URL: ${KEYCLOAK_URL}
-      JWT_ISSUER_URI: ${JWT_ISSUER_URI}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      OPEN_AI_API: ${OPEN_AI_API}
+      OPEN_AI_URL: ${OPEN_AI_URL}
+      JIRA_URL: ${JIRA_URL}
     depends_on:
       - postgres
-      - keycloak
     ports:
       - "8080:8080"
     networks:
@@ -52,7 +51,6 @@ services:
 
 volumes:
   postgres_data:
-  keycloak_data:
 
 networks:
   backend-network:
