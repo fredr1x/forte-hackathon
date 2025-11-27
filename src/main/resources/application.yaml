@@ -1,4 +1,6 @@
 spring:
+  main:
+    banner-mode: console
   ai:
     openai:
       chat:
@@ -37,3 +39,17 @@ jwt:
 
 jira:
   url: ${JIRA_URL}
+
+logging:
+  file:
+    name: logs/app.log
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui

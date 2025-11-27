@@ -31,7 +31,7 @@ public class MeetingService {
         validatePmRole(user);
 
         try {
-            Meeting meeting = Meeting.builder()
+            var meeting = Meeting.builder()
                     .team(user.getTeam())
                     .fileName(file.getOriginalFilename())
                     .uploadedAt(LocalDateTime.now())
@@ -59,7 +59,7 @@ public class MeetingService {
     @Async
     @Transactional
     public void processMeetingAsync(Long meetingId, byte[] audioData, User user) {
-        Meeting meeting = meetingRepository.findById(meetingId)
+        var meeting = meetingRepository.findById(meetingId)
                 .orElseThrow(() -> new RuntimeException("Meeting not found"));
 
         try {
@@ -72,37 +72,15 @@ public class MeetingService {
             meetingRepository.save(meeting);
 
             log.info("Extracting tasks from meeting {}", meetingId);
-            List<String> teamMembers = user.getTeam().getMembers().stream()
+            var teamMembers = user.getTeam().getMembers().stream()
                     .map(User::getUsername)
                     .collect(Collectors.toList());
 
-            List<TaskExtractionResult> extractedTasks =
+            var extractedTasks =
                     aiService.extractTasksFromTranscription(transcription, teamMembers);
 
-            for (TaskExtractionResult extraction : extractedTasks) {
-                Task task = Task.builder()
-                        .summary(extraction.getSummary())
-                        .description(extraction.getDescription())
-                        .team(user.getTeam())
-                        .status(TaskStatus.TODO)
-                        .priority(Priority.valueOf(extraction.getPriority()))
-                        .deadline(extraction.getDeadline())
-                        .meeting(meeting)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
-                        .build();
-
-                if (extraction.getAssigneeName() != null) {
-                    userRepository.findByUsernameAndTeam(extraction.getAssigneeName(), user.getTeam())
-                            .ifPresent(task::setAssignee);
-                }
-
-                // Создаем в Jira
-                String jiraKey = jiraService.createIssue(user, task);
-                task.setJiraKey(jiraKey);
-                task.setJiraUrl(jiraService.getIssueUrl(user, jiraKey));
-
-                taskRepository.save(task);
+            for (var extraction : extractedTasks) {
+                var jiraKey = buildAndSave(user, extraction, meeting);
                 log.info("Created task {} from meeting {}", jiraKey, meetingId);
             }
 
@@ -114,14 +92,14 @@ public class MeetingService {
                     meetingId, extractedTasks.size());
 
         } catch (Exception e) {
-            log.error("Error processing meeting " + meetingId, e);
+            log.error("Error processing meeting {}", meetingId, e);
             meeting.setProcessingStatus(ProcessingStatus.FAILED);
             meetingRepository.save(meeting);
         }
     }
 
     public MeetingAnalysisResponse getMeetingStatus(User user, Long meetingId) {
-        Meeting meeting = meetingRepository.findById(meetingId)
+        var meeting = meetingRepository.findById(meetingId)
                 .orElseThrow(() -> new RuntimeException("Meeting not found"));
 
         validateTeamAccess(user, meeting);
@@ -138,6 +116,85 @@ public class MeetingService {
                 .tasks(tasks)
                 .processedAt(meeting.getProcessedAt())
                 .build();
+    }
+
+    @Transactional
+    public MeetingAnalysisResponse analyzeTranscript(User user, MeetingTranscriptRequest request) {
+        validatePmRole(user);
+
+        var meeting = Meeting.builder()
+                .team(user.getTeam())
+                .transcription(request.getTranscript())
+                .uploadedAt(request.getMeetingDate() != null ? request.getMeetingDate() : LocalDateTime.now())
+                .processingStatus(ProcessingStatus.PROCESSING)
+                .build();
+
+        meeting = meetingRepository.save(meeting);
+
+        log.info("Processing transcript for meeting {}", meeting.getId());
+
+        processTranscriptAsync(meeting.getId(), request.getTranscript(), user);
+
+        return MeetingAnalysisResponse.builder()
+                .meetingId(meeting.getId())
+                .status(ProcessingStatus.PROCESSING.name())
+                .message("Transcript is being processed")
+                .build();
+    }
+
+    @Async
+    @Transactional
+    public void processTranscriptAsync(Long meetingId, String transcript, User user) {
+        var meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new RuntimeException("Meeting not found"));
+
+        try {
+            meeting.setProcessingStatus(ProcessingStatus.PROCESSING);
+            meetingRepository.save(meeting);
+
+            var extractedTasks = aiService.extractTasksFromTranscription(transcript,
+                    user.getTeam().getMembers().stream().map(User::getUsername).toList());
+
+            for (var extraction : extractedTasks) {
+                buildAndSave(user, extraction, meeting);
+            }
+
+            meeting.setProcessingStatus(ProcessingStatus.COMPLETED);
+            meeting.setProcessedAt(LocalDateTime.now());
+            meetingRepository.save(meeting);
+
+            log.info("Transcript for meeting {} processed successfully", meetingId);
+
+        } catch (Exception e) {
+            log.error("Error processing transcript for meeting {}", meetingId, e);
+            meeting.setProcessingStatus(ProcessingStatus.FAILED);
+            meetingRepository.save(meeting);
+        }
+    }
+
+    private Task buildAndSave(User user, TaskExtractionResult extraction, Meeting meeting) {
+        var task = Task.builder()
+                .summary(extraction.getSummary())
+                .description(extraction.getDescription())
+                .team(user.getTeam())
+                .status(TaskStatus.TODO)
+                .priority(Priority.valueOf(extraction.getPriority()))
+                .deadline(extraction.getDeadline())
+                .meeting(meeting)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        if (extraction.getAssigneeName() != null) {
+            userRepository.findByUsernameAndTeam(extraction.getAssigneeName(), user.getTeam())
+                    .ifPresent(task::setAssignee);
+        }
+
+        var jiraKey = jiraService.createIssue(user, task);
+        task.setJiraKey(jiraKey);
+        task.setJiraUrl(jiraService.getIssueUrl(user, jiraKey));
+
+        return taskRepository.save(task);
     }
 
     private TaskResponse mapTaskToResponse(Task task) {

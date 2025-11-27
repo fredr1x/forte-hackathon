@@ -43,7 +43,6 @@ public class TaskService {
             task.setAssignee(assignee);
         }
 
-        // Создаем задачу в Jira
         String jiraKey = jiraService.createIssue(user, task);
         task.setJiraKey(jiraKey);
         task.setJiraUrl(jiraService.getIssueUrl(user, jiraKey));

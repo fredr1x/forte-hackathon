@@ -13,4 +13,7 @@ public class OpenAIProperties {
 
     @Value("${openai.api}")
     private String openAIAPI;
+
+    @Value("${openai.url}")
+    private String openAIURL;
 }

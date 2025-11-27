@@ -4,7 +4,8 @@ import lombok.Data;
 
 @Data
 public class PMLoginRequest {
-    private String username;
+    private String jiraEmail;
     private String password;
+    private String jiraApiToken;
     private Long telegramId;
 }
